@@ -3,26 +3,42 @@ name: build
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 jobs:
   ci:
     name: Run checks and tests over ${{matrix.otp_vsn}} and ${{matrix.os}}
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        otp_vsn: [24, 25, 26, 27]
+        otp_vsn: [26, 27]
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v2
-      - uses: erlef/setup-beam@v1.18.1
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp_vsn}}
-          rebar3-version: '3.22.1'
-      - run: rebar3 as test xref
-      - run: rebar3 as test dialyzer
-      - run: rebar3 hank
-      - run: rebar3 lint
-      # - run: rebar3 as test ct
+          rebar3-version: '3.25.0'
+
+      - name: Install dependencies
+        run: rebar3 get-deps
+
+      - name: Run xref analysis
+        run: rebar3 as test xref
+
+      - name: Run dialyzer analysis
+        run: rebar3 as test dialyzer
+
+      - name: Run hank analysis
+        run: rebar3 hank
+
+      - name: Run linting
+        run: rebar3 lint
+
+      #- name: Run Common Test
+      #  run: rebar3 as test ct
