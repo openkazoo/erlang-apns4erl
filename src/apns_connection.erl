@@ -90,6 +90,7 @@
                          , timeout    => integer()
                          , type       := type()
                          , proxy_info => proxy_info()
+                         , options    => gun:opts()
                          }.
 
 -type stream_data() :: #{ from := {pid(), term()}
@@ -245,27 +246,33 @@ open_origin(internal, _, #{connection := Connection} = StateData) ->
   Host = host(Connection),
   Port = port(Connection),
   TlsOpts = tls_opts(Connection),
-  Http2Opts = http2_opts(),
+  ConnectionOpts = maps:get(options, Connection, #{}),
+  UserHttp2Opts = maps:get(http2_opts, ConnectionOpts, #{}),
+  Http2Opts = maps:merge(http2_opts(), UserHttp2Opts),
+  Opts0 = #{ protocols      => [http2]
+           , http2_opts     => Http2Opts
+           , tls_opts       => TlsOpts
+           , retry          => 0
+           },
+  Opts = add_options(Connection, Opts0),
   {next_state, open_common, StateData,
     {next_event, internal, { Host
                            , Port
-                           , #{ protocols      => [http2]
-                              , http2_opts     => Http2Opts
-                              , tls_opts       => TlsOpts
-                              , retry          => 0
-                              }}}}.
+                           , Opts}}}.
 
 -spec open_proxy(_, _, _) -> _.
 open_proxy(internal, _, StateData) ->
   #{connection := Connection} = StateData,
   #{type := connect, host := ProxyHost, port := ProxyPort} = proxy(Connection),
+  Opts0 = #{ protocols => [http]
+           , transport => tcp
+           , retry     => 0
+           },
+  Opts = add_options(Connection, Opts0),
   {next_state, open_common, StateData,
     {next_event, internal, { ProxyHost
                            , ProxyPort
-                           , #{ protocols => [http]
-                              , transport => tcp
-                              , retry     => 0
-                              }}}}.
+                           , Opts}}}.
 
 %% This function exists only to make Elvis happy.
 %% I do not think it makes things any easier to read.
@@ -656,6 +663,10 @@ backoff(N, Ceiling) ->
       NString = float_to_list(NextN, [{decimals, 0}]),
       list_to_integer(NString)
   end.
+
+-spec add_options(connection(), gun:opts()) -> gun:opts().
+add_options(Connection, Opts) ->
+  maps:merge(maps:get(options, Connection, #{}), Opts).
 
 %%%===================================================================
 %%% spawn/3 functions
